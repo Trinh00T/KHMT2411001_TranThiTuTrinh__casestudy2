@@ -1,5 +1,8 @@
 
 import 'package:flutter/material.dart';
+import 'screens/add_transaction_screen.dart';
+import 'screens/edit_transaction_screen.dart';
+import 'database/database_helper.dart';
 
 void main() {
   runApp(const ExpenseManagerApp());
@@ -182,37 +185,71 @@ class ExpenseHomeScreen extends StatefulWidget {
 
 class _ExpenseHomeScreenState extends State<ExpenseHomeScreen> {
   int selectedTab = 0;
+  @override
+  void initState() {
+    super.initState();
+    loadTransactions();
+  }
 
-  final List<Map<String, dynamic>> transactions = [
-    {
-      'title': 'Ăn uống',
-      'date': '10/10/2026',
-      'amount': -85000,
-      'icon': Icons.restaurant,
-      'color': const Color(0xFFFFA726),
-    },
-    {
-      'title': 'Di chuyển',
-      'date': '09/10/2026',
-      'amount': -30000,
-      'icon': Icons.directions_bus,
-      'color': const Color(0xFF42A5F5),
-    },
-    {
-      'title': 'Tiền làm thêm',
-      'date': '08/10/2026',
-      'amount': 500000,
-      'icon': Icons.account_balance_wallet,
-      'color': const Color(0xFF66BB6A),
-    },
-    {
-      'title': 'Mua sắm',
-      'date': '07/10/2026',
-      'amount': -120000,
-      'icon': Icons.shopping_bag,
-      'color': const Color(0xFFAB70D6),
-    },
-  ];
+  Future<void> loadTransactions() async {
+    final data = await DatabaseHelper.instance.getTransactions();
+
+    if (!mounted) return;
+
+    setState(() {
+      transactions
+        ..clear()
+        ..addAll(data.map((item) {
+          final isExpense = item['isExpense'] == 1;
+          final category = item['category'] as String;
+
+          return {
+            ...item,
+            'amount': isExpense
+                ? -(item['amount'] as num).toInt()
+                : (item['amount'] as num).toInt(),
+            'date': item['date'].toString().substring(0, 10),
+            'icon': getCategoryIcon(category),
+            'color': getCategoryColor(category),
+          };
+        }));
+    });
+  }
+
+  IconData getCategoryIcon(String category) {
+    switch (category) {
+      case 'Ăn uống':
+        return Icons.restaurant;
+      case 'Di chuyển':
+        return Icons.directions_bus;
+      case 'Mua sắm':
+        return Icons.shopping_bag;
+      case 'Lương':
+      case 'Tiền làm thêm':
+        return Icons.account_balance_wallet;
+      default:
+        return Icons.receipt_long;
+    }
+  }
+
+  Color getCategoryColor(String category) {
+    switch (category) {
+      case 'Ăn uống':
+        return const Color(0xFFFFA726);
+      case 'Di chuyển':
+        return const Color(0xFF42A5F5);
+      case 'Mua sắm':
+        return const Color(0xFFAB70D6);
+      case 'Lương':
+      case 'Tiền làm thêm':
+        return const Color(0xFF66BB6A);
+      default:
+        return primaryColor;
+    }
+  }
+
+  final List<Map<String, dynamic>> transactions = [];
+
 
   int get totalIncome {
     return transactions.fold<int>(
@@ -247,105 +284,51 @@ class _ExpenseHomeScreenState extends State<ExpenseHomeScreen> {
     return '${amount < 0 ? '-' : ''}${buffer.toString()} đ';
   }
 
-  void showAddTransactionDialog() {
-    final titleController = TextEditingController();
-    final amountController = TextEditingController();
-    bool isIncome = false;
 
-    showDialog(
-      context: context,
-      builder: (dialogContext) {
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            return AlertDialog(
-              title: const Text('Thêm giao dịch'),
-              content: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    TextField(
-                      controller: titleController,
-                      decoration: const InputDecoration(
-                        labelText: 'Tên giao dịch',
-                        hintText: 'Ví dụ: Ăn uống',
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: amountController,
-                      keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(
-                        labelText: 'Số tiền (VNĐ)',
-                        hintText: 'Ví dụ: 50000',
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    SwitchListTile(
-                      contentPadding: EdgeInsets.zero,
-                      title: Text(
-                        isIncome ? 'Khoản thu' : 'Khoản chi',
-                      ),
-                      value: isIncome,
-                      onChanged: (value) {
-                        setDialogState(() => isIncome = value);
-                      },
-                    ),
-                  ],
-                ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(dialogContext),
-                  child: const Text('Hủy'),
-                ),
-                ElevatedButton(
-                  onPressed: () {
-                    final title = titleController.text.trim();
-                    final amount =
-                    int.tryParse(amountController.text.trim());
-
-                    if (title.isEmpty || amount == null || amount <= 0) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Vui lòng nhập tên và số tiền hợp lệ.'),
-                        ),
-                      );
-                      return;
-                    }
-
-                    setState(() {
-                      transactions.insert(0, {
-                        'title': title,
-                        'date':
-                        '${DateTime.now().day.toString().padLeft(2, '0')}/'
-                            '${DateTime.now().month.toString().padLeft(2, '0')}/'
-                            '${DateTime.now().year}',
-                        'amount': isIncome ? amount : -amount,
-                        'icon': isIncome
-                            ? Icons.attach_money
-                            : Icons.payments_outlined,
-                        'color': isIncome
-                            ? const Color(0xFF66BB6A)
-                            : const Color(0xFFFFA726),
-                      });
-                    });
-
-                    Navigator.pop(dialogContext);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Đã thêm giao dịch thành công!'),
-                      ),
-                    );
-                  },
-                  child: const Text('Lưu'),
-                ),
-              ],
-            );
-          },
-        );
-      },
+  Future<void> showAddTransactionDialog() async {
+    final result = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => const AddTransactionScreen(),
+      ),
     );
+
+
+    if (result == true && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Đã thêm giao dịch thành công!'),
+        ),
+      );
+    }
   }
+
+  Future<void> showEditTransaction(
+      Map<String, dynamic> transaction,
+      ) async {
+    final result = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => EditTransactionScreen(
+          transaction: transaction,
+        ),
+      ),
+    );
+
+    if (result == true && mounted) {
+      await loadTransactions();
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Đã cập nhật giao dịch thành công!'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    }
+  }
+
 
   @override
   Widget build(BuildContext context) {
@@ -498,7 +481,10 @@ class _ExpenseHomeScreenState extends State<ExpenseHomeScreen> {
     final amount = transaction['amount'] as int;
     final color = transaction['color'] as Color;
 
-    return Container(
+    return InkWell(
+        onTap: () => showEditTransaction(transaction),
+        borderRadius: BorderRadius.circular(15),
+        child: Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(15),
       decoration: BoxDecoration(
@@ -548,9 +534,9 @@ class _ExpenseHomeScreenState extends State<ExpenseHomeScreen> {
           ),
         ],
       ),
+        ),
     );
   }
-
   Widget buildStatisticsTab() {
     final total = totalIncome + totalExpense;
     final incomePercent = total == 0 ? 0.0 : totalIncome / total;
